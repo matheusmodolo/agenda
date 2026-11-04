@@ -21,12 +21,12 @@ enum StatusReserva: string
         return in_array($status, $permitidos, true);
     }
 
-    public function ativos(): array
+    public static function ativos(): array
     {
         return [self::Pendente, self::Confirmada];
     }
 
-    public function rotulo(): string
+    public static function rotulo(): string
     {
         return match ($this) {
             self::Pendente => 'Pendente',
