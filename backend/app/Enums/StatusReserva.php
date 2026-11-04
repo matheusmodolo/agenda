@@ -26,7 +26,7 @@ enum StatusReserva: string
         return [self::Pendente, self::Confirmada];
     }
 
-    public static function rotulo(): string
+    public function rotulo(): string
     {
         return match ($this) {
             self::Pendente => 'Pendente',
