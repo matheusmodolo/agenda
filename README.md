@@ -1,5 +1,5 @@
 # Agenda de Máquinas
-> **Fase atual:** a parte das regras (o "cérebro" do sistema) está pronta e testada. As rotas da API e a tela em Angular ainda não foram feitas.
+> **Fase atual:** as regras estão prontas e testadas, e a API já expõe essas regras para o front-end. A tela em Angular ainda não foi feita.
 
 ---
 
@@ -64,7 +64,54 @@ Quando algo dá errado, o sistema responde com uma mensagem em português e um c
 }
 ```
 
-A mensagem é para a pessoa ler. O `codigo` é para o front-end (ou um teste) saber o que aconteceu sem depender do texto.
+A mensagem é para ser legível. O `codigo` é para o front-end (ou um teste) saber o que aconteceu sem depender do texto.
+
+### 5. A API
+
+São estas as rotas que o front-end vai consumir. Todas começam com `http://localhost:8000/api`.
+-`GET` | `/maquinas` | Lista as máquinas, em ordem alfabética
+-`GET` | `/clientes` | Lista os clientes, em ordem alfabética
+-`GET` | `/reservas` | Lista as reservas, da mais próxima para a mais distante
+-`POST` | `/reservas` | Cria uma reserva nova
+-`PATCH` | `/reservas/{id}/status` | Muda o status de uma reserva (confirmar, cancelar, concluir)
+
+**Filtrar reservas:** a listagem aceita os filtros `maquina_id` e `status` na URL. (`/reservas?maquina_id=1&status=pendente`).
+
+**Criar uma reserva:** basta mandar a máquina, o cliente e o período:
+
+```json
+{
+  "maquina_id": 1,
+  "cliente_id": 1,
+  "inicio": "2026-11-10T10:00:00-03:00",
+  "fim": "2026-11-10T12:00:00-03:00"
+}
+```
+
+Se der certo, a resposta vem com o código **201** e a reserva criada:
+
+```json
+{
+  "data": {
+    "id": 4,
+    "maquina": { "id": 1, "nome": "Trator 01" },
+    "cliente": { "id": 1, "nome": "Maria" },
+    "inicio": "2026-11-10T10:00:00-03:00",
+    "fim": "2026-11-10T12:00:00-03:00",
+    "status": "pendente",
+    "status_rotulo": "Pendente"
+  }
+}
+```
+
+**O que a API confere:**
+
+- Se os campos obrigatórios vieram e estão no formato certo (números, datas).
+- Se a máquina e o cliente informados existem.
+- Se o status pedido é um dos quatro que existem.
+- Se a reserva do `PATCH` existe. Se não existir, a resposta é **404**.
+
+Quando passa por essa conferência, quem decide o resto (conflito, período, transição de status) é o `ReservaService`.
 
 ---
 
@@ -86,6 +133,8 @@ php artisan key:generate
 php artisan migrate --seed
 php artisan serve # http://localhost:8000
 ```
+
+A API já está liberada (CORS) para receber chamadas do front-end Angular rodando em `http://localhost:4200`.
 
 ---
 
@@ -143,6 +192,14 @@ Todas as regras ficam no `ReservaService`, e não espalhadas pelos controllers. 
 - se amanhã a reserva puder ser criada por outro caminho (um comando, uma fila), a regra é a mesma;
 - mais fácil de encontrar.
 
+### API
+
+Cada pedido que chega na API passa por três etapas, e cada uma cuida de uma coisa só:
+
+1. **Form Request** (`CriarReservaRequest`, `ListarReservasRequest`, `MudarStatusReservaRequest`): confere se os dados vieram conforme o esperado.
+2. **Controller**: só recebe o pedido, chama o `ReservaService` e devolve a resposta.
+3. **Resource** (`ReservaResource`): monta o JSON de resposta sempre no mesmo formato.
+
 ### Status como Enum
 
 Os status (Pendente, Confirmada, Cancelada, Concluída) são um *enum* do PHP, e não textos soltos. Isso evita erro de digitação e deixa a regra de "pode mudar de X para Y" dentro do próprio enum, num lugar só e fácil de ler.
@@ -162,13 +219,17 @@ O sistema trabalha no horário de Brasília (`America/Sao_Paulo`), configurado n
 
 O navegador costuma mandar as datas em UTC (por exemplo, `2026-11-10T13:00:00Z`). O sistema converte para o horário local **antes** de comparar ou salvar. Sem isso, uma reserva das 10h poderia ser gravada como 13h, e a checagem de conflito daria resultado errado.
 
+Na volta, acontece o cuidado contrário: a API devolve as datas com o fuso junto (`2026-11-10T10:00:00-03:00`). Sem isso, o Laravel mandaria em UTC (`13:00Z`).
+
 ---
 
 ## Limitações e o que eu faria com mais tempo
 
 - **Duas pessoas reservando ao mesmo tempo:** hoje, se dois pedidos para o mesmo horário chegarem exatamente juntos, os dois podem passar na checagem. A solução é fazer a checagem e a gravação dentro de uma transação, travando as linhas com `lockForUpdate`.
 - **Sugerir o próximo horário livre:** quando houver conflito, mostrar ao cliente o próximo horário disponível com a mesma duração. Já comecei, mas ainda não está pronto.
-- **API e tela:** criar as rotas da API e a interface em Angular (a pasta `frontend` ainda tem só o projeto inicial).
-- **Paginação** na listagem de reservas.
-- **Testes do front-end.**
+- **Tela:** criar a interface em Angular (a pasta `frontend` ainda tem só o projeto inicial).
+- **Login:** hoje a API é aberta e o cliente é escolhido numa lista. Com mais tempo, o cliente viria do usuário logado.
+- **Paginação** na listagem de reservas, que hoje traz tudo de uma vez.
+- **Testes da API:** testar as rotas de ponta a ponta (status 201, 404, 409 e 422 e o formato do JSON).
 - **Testes das mudanças de status** (as regras já existem, mas ainda não têm testes próprios).
+- **Testes do front-end.**
